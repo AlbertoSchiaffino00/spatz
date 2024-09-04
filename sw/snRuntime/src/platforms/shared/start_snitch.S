@@ -3,10 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 #include "../../start.S"
+#include <spatz_cluster_peripheral.h>
 
 # Function to determine the initial cluster layout to setup the initial stack.
 # See `hw/system/snitch_cluster/test/tb_lib.hh` for details of the bootdata
-# layout.
+# layout. 
+# It also make the cluster busy by writing to the status register
 #
 # Expecting:
 # - a0: mhartid
@@ -14,14 +16,36 @@
 _snrt_init_core_info:
     .globl _snrt_init_core_info
     mv        a4, a1
-    lw        a1, 4(a4)  # load the number of cores per cluster
-    lw        t0, 8(a4)  # load cluster's hartid offset
     lw        a2, 12(a4) # start address of the TCDM
     lw        t1, 16(a4) # size of TCDM address space
-    lw        t2, 20(a4) # offset between cluster TCDMs
+
+    # Final address of the TCDM
+    add     t3, t1, a2
+    # Address of the STATUS register
+    addi       t3, t3, SPATZ_CLUSTER_PERIPHERAL_SPATZ_STATUS_REG_OFFSET
+    # Make cluster busy
+    li         t2, 1
+    sw         t2, 0(t3)
+
+    lw        a1, 4(a4)  # load the number of cores per cluster
+    lw        t0, 8(a4)  # load cluster's hartid offset
+    # lw        t2, 20(a4) # offset between cluster TCDMs
     sub       a0, a0, t0
-    div       t3, a0, a1 # calculate cluster index
-    mul       t4, t3, t2 # calculate cluster TCDM offset
+    # div       t3, a0, a1 # calculate cluster index
+    # mul       t4, t3, t2 # calculate cluster TCDM offset
+    # add       a2, a2, t4 # start address of current cluster TCDM
+    lui       t4, %hi(_el1_0)
+    li        t5, 0x51000
+    bne       t4,t5, 1f
+
+    addi      t4, t4, %lo(_el1_0)
+    j         2f
+
+1:  lui       t4, %hi(_el1_1)
+    addi      t4, t4, %lo(_el1_1)
+
+2:  li        t5, 0xfffff
+    and       t4, t4, t5
     add       a2, a2, t4 # start address of current cluster TCDM
     add       a3, a2, t1 # end address of current cluster TCDM
     remu      a0, a0, a1 # calculate cluster-local core id
@@ -30,13 +54,21 @@ _snrt_init_core_info:
 # Must leave a0 untouched.
 _snrt_cluster_barrier:
     .globl _snrt_cluster_barrier
-    addi      sp, sp, -4
-    sw        ra, 0(sp)
-    call      _snrt_barrier_reg_ptr
+    # addi      sp, sp, -4
+    # sw        ra, 0(sp)
+    # call      _snrt_barrier_reg_ptr
+    # lw        a0, 0(a0)
+    # mv        zero, a0
+    # lw        ra, 0(sp)
+    # addi      sp, sp, 4
+
+    la        t0, BOOTDATA
+    lw        t1, 12(t0) # start address of the TCDM
+    lw        t2, 16(t0) # size of TCDM address space
+    add       t1, t1, t2
+    addi      a0, t1, SPATZ_CLUSTER_PERIPHERAL_HW_BARRIER_REG_OFFSET
     lw        a0, 0(a0)
     mv        zero, a0
-    lw        ra, 0(sp)
-    addi      sp, sp, 4
     ret
 
 # Mustn't use any non-temporary registers
@@ -47,3 +79,59 @@ _snrt_get_base_hartid:
     .globl _snrt_get_base_hartid
     lw        a0, 8(a0)  # load cluster's hartid offset
     ret
+
+
+# Function to terminate execution.
+#
+# Expecting:
+# - a0: exit code
+_snrt_exit:
+    .globl _snrt_exit
+    # Determine global core index.
+    addi      sp, sp, -8
+    sw        a0, 0(sp)
+    sw        ra, 4(sp)
+    call      snrt_global_core_idx
+    # reload exit code into t0 and device tree ptr into t1
+    lw        t0, 0(sp)
+    lw        ra, 4(sp)
+    addi      sp, sp, 8
+
+    # Only first core triggers exit.
+    # - a0: global core index
+    # - t0: exit code
+    bnez      a0, 1f
+    slli      t0, t0, 1
+    ori       t0, t0, 1
+
+    # Load the start address and size of the TCDM
+    la        t1, BOOTDATA # device tree ptr
+    lw        t2, 12(t1) # start address of the TCDM
+    lw        t3, 16(t1) # size of TCDM address space
+
+    # Final address of the TCDM
+    add     t4, t2, t3
+
+    # Address of the EOC register
+    addi     t1, t4, SPATZ_CLUSTER_PERIPHERAL_CLUSTER_EOC_EXIT_REG_OFFSET
+
+    # Return to EOC register
+    sw         t0, 0(t1)
+
+    # Address of the STATUS register
+    addi       t1, t4, SPATZ_CLUSTER_PERIPHERAL_SPATZ_STATUS_REG_OFFSET
+
+    # Make cluster NOT busy
+    sw         zero, 0(t1)
+
+    # Return to HTIF
+    la        t2, tohost
+    sw        t0, 0(t2)
+1:  ret
+
+
+
+# HTIF sections
+.pushsection .htif,"aw",@progbits;
+.align 6; .global tohost; tohost: .dword 0;
+.align 6; .global fromhost; fromhost: .dword 0;

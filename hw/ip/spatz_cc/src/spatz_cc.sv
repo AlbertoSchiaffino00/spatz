@@ -71,7 +71,7 @@ module spatz_cc
     // Enable V Extension
     parameter bit                                          RVV                      = 1,
     // Spatz paramaters
-    parameter int                          unsigned        NumSpatzFPUs             = 4,
+    parameter int                          unsigned        NumSpatzFPUs             = 2,
     parameter int                          unsigned        NumSpatzIPUs             = 1,
     /// Add isochronous clock-domain crossings e.g., make it possible to operate
     /// the core in a slower clock domain.

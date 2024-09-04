@@ -72,8 +72,8 @@ int main() {
   snrt_cluster_hw_barrier();
 
   // Start dump
-  if (cid == 0)
-    start_kernel();
+  // if (cid == 0)
+  //   start_kernel();
 
   // Start timer
   if (cid == 0)
@@ -98,28 +98,28 @@ int main() {
   snrt_cluster_hw_barrier();
 
   // End dump
-  if (cid == 0)
-    stop_kernel();
+  // if (cid == 0)
+  //   stop_kernel();
 
   // End timer and check if new best runtime
   if (cid == 0)
     timer = benchmark_get_cycle() - timer;
 
   // Check and display results
-  if (cid == 0) {
-    long unsigned int performance = 1000 * 2 * dotp_l.M / timer;
-    long unsigned int utilization = performance / (2 * num_cores * 4);
+  // if (cid == 0) {
+  //   long unsigned int performance = 1000 * 2 * dotp_l.M / timer;
+  //   long unsigned int utilization = performance / (2 * num_cores * 4);
 
-    printf("\n----- (%d) dp fdotp -----\n", dotp_l.M);
-    printf("The execution took %u cycles.\n", timer);
-    printf("The performance is %ld OP/1000cycle (%ld%%o utilization).\n",
-           performance, utilization);
-  }
+  //   printf("\n----- (%d) dp fdotp -----\n", dotp_l.M);
+  //   printf("The execution took %u cycles.\n", timer);
+  //   printf("The performance is %ld OP/1000cycle (%ld%%o utilization).\n",
+  //          performance, utilization);
+  // }
 
   if (cid == 0)
     if (fp_check(result[0], dotp_result)) {
-      printf("Error: Result = %f, Golden = %f\n", result[0], dotp_result);
-      return -1;
+      // printf("Error: Result = %f, Golden = %f\n", result[0], dotp_result);
+      return 1;
     }
 
   // Wait for core 0 to finish displaying results

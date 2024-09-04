@@ -8,6 +8,8 @@
 
 #include "snrt.h"
 
+__thread extern uint32_t cluster_idx;
+
 /**
  * @brief Initialize the event unit
  */

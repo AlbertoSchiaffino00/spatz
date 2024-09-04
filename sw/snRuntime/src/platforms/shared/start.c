@@ -44,11 +44,11 @@ void _snrt_init_team(uint32_t cluster_core_id, uint32_t cluster_core_num,
     (void)cluster_core_id;
     team->base.root = team;
     team->bootdata = (void *)bootdata;
-    team->global_core_base_hartid = bootdata->hartid_base;
-    team->global_core_num = bootdata->core_count;
+    team->global_core_base_hartid = 0x10;
+    team->global_core_num = 0x4;
     team->cluster_idx =
-        (snrt_hartid() - bootdata->hartid_base) / bootdata->core_count;
-    team->cluster_num = 0;
+        (snrt_hartid() - team->global_core_base_hartid) / bootdata->core_count;
+    team->cluster_num = 0x2;
     team->cluster_core_base_hartid = bootdata->hartid_base;
     team->cluster_core_num = cluster_core_num;
     team->global_mem.start =

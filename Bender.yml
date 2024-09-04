@@ -173,7 +173,7 @@ sources:
   ## system/spatz_cluster ##
 
   # Level 0
-  - hw/system/spatz_cluster/src/generated/bootrom.sv
+  - hw/system/spatz_cluster/test/bootrom.sv
   - hw/system/spatz_cluster/src/spatz_amo_shim.sv
   - hw/system/spatz_cluster/src/spatz_cluster_peripheral/spatz_cluster_peripheral_reg_pkg.sv
   - hw/system/spatz_cluster/src/spatz_tcdm_interconnect.sv
@@ -185,7 +185,10 @@ sources:
   # Level 3
   - hw/system/spatz_cluster/src/spatz_cluster.sv
   # Level 4
-  - hw/system/spatz_cluster/src/generated/spatz_cluster_wrapper.sv
+  - hw/system/spatz_cluster/test/spatz_cluster_wrapper.sv
+
+
+
 
   - target: spatz_test
     files:

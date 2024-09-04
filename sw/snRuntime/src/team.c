@@ -53,7 +53,8 @@ uint32_t snrt_cluster_compute_core_idx() {
 
 uint32_t snrt_cluster_compute_core_num() {
     // TODO: Actually derive this from the device tree!
-    return snrt_cluster_core_num() - 1;
+    //return snrt_cluster_core_num() - 1; //NO DMA
+    return snrt_cluster_core_num();
 }
 
 uint32_t snrt_cluster_dm_core_idx() {

@@ -6,6 +6,7 @@
 
 #include "dm.h"
 #include "snrt.h"
+#include "sync_teams.h"
 
 //================================================================================
 // settings
@@ -17,12 +18,12 @@
  * number of arguments
  *
  */
-#define KMP_FORK_MAX_NARGS 12
 
 //================================================================================
 // data
 //================================================================================
-static omp_t *volatile omp_p_global;
+static omp_t *volatile omp_p_global_cl1;
+static omp_t *volatile omp_p_global_cl2;
 
 #ifndef OMPSTATIC_NUMTHREADS
 __thread omp_t volatile *omp_p;
@@ -50,8 +51,8 @@ static inline void initTeam(omp_t *_this, omp_team_t *team) {
 void omp_init(void) {
     if (snrt_cluster_core_idx() == 0) {
         // allocate space for kmp arguments
-        kmpc_args =
-            (_kmp_ptr32 *)snrt_l1alloc(sizeof(_kmp_ptr32) * KMP_FORK_MAX_NARGS);
+        // kmpc_args =
+        //     (_kmp_ptr32 *)snrt_l1alloc(sizeof(_kmp_ptr32) * KMP_FORK_MAX_NARGS);
 #ifndef OMPSTATIC_NUMTHREADS
         omp_p = (omp_t *)snrt_l1alloc(sizeof(omp_t));
         unsigned int nbCores = snrt_cluster_compute_core_num();
@@ -61,6 +62,10 @@ void omp_init(void) {
         omp_p->plainTeam.nbThreads = nbCores;
         omp_p->plainTeam.loop_epoch = 0;
         omp_p->plainTeam.loop_is_setup = 0;
+
+        omp_p->numTeams = 2;
+        omp_p->maxTeams = 2;
+        omp_p->teamId = (cluster_idx == 0) ? 0 : 1;
 
         for (int i = 0; i < sizeof(omp_p->plainTeam.core_epoch) /
                                 sizeof(omp_p->plainTeam.core_epoch[0]);
@@ -72,13 +77,15 @@ void omp_init(void) {
             (struct snrt_barrier *)snrt_l1alloc(sizeof(struct snrt_barrier));
         snrt_memset(omp_p->kmpc_barrier, 0, sizeof(struct snrt_barrier));
         // Exchange omp pointer with other cluster cores
-        omp_p_global = omp_p;
+        if (cluster_idx == 0) omp_p_global_cl1 = omp_p;
+        else  omp_p_global_cl2 = omp_p;
 #else
         omp_p.kmpc_barrier =
             (struct snrt_barrier *)snrt_l1alloc(sizeof(struct snrt_barrier));
         snrt_memset(omp_p.kmpc_barrier, 0, sizeof(struct snrt_barrier));
         // Exchange omp pointer with other cluster cores
-        omp_p_global = &omp_p;
+        if (cluster_idx == 0) omp_p_global_cl1 = &omp_p;
+        else  omp_p_global_cl2 = &omp_p;
 #endif
 
 #ifdef OPENMP_PROFILE
@@ -86,11 +93,20 @@ void omp_init(void) {
 #endif
 
     } else {
-        while (!omp_p_global)
-            ;
+        if(cluster_idx ==0){
+            while (!omp_p_global_cl1)
+                ;
 #ifndef OMPSTATIC_NUMTHREADS
-        omp_p = omp_p_global;
+            omp_p = omp_p_global_cl1;
 #endif
+        }else{
+            while (!omp_p_global_cl2)
+                ;
+#ifndef OMPSTATIC_NUMTHREADS
+            omp_p = omp_p_global_cl2;
+#endif
+        }
+
     }
 
     OMP_PRINTF(10, "omp_init numThreads=%d maxThreads=%d\n", omp_p->numThreads,
@@ -107,25 +123,35 @@ void omp_init(void) {
  *
  * @param core_idx cluster-local core-index
  */
-unsigned __attribute__((noinline)) snrt_omp_bootstrap(uint32_t core_idx) {
-    dm_init();
+unsigned __attribute__((noinline)) snrt_omp_bootstrap(uint32_t global_core_idx) {
+    //dm_init();
+    teams_init();
     eu_init();
     omp_init();
-    if (core_idx == 0) {
+    uint32_t cluster_core_idx = snrt_cluster_core_idx();
+    if (global_core_idx == 0) {
         // master hart initializes event unit and runtime
         snrt_cluster_hw_barrier();
         while (eu_get_workers_in_wfi() != (snrt_cluster_compute_core_num() - 1))
             ;
         return 0;
-    } else if (snrt_is_dm_core()) {
-        // send datamover to dm_main
+    // }
+    // else if (snrt_is_dm_core()) {
+    //     // send datamover to dm_main
+    //     snrt_cluster_hw_barrier();
+    //     dm_main();
+    //     return 1;
+    }else if(cluster_core_idx == 0){
         snrt_cluster_hw_barrier();
-        dm_main();
-        return 1;
+        while (eu_get_workers_in_wfi() != (snrt_cluster_compute_core_num() - 1))
+            ;
+        teams_event_loop(global_core_idx);
+        return 0;
+
     } else {
         // all worker cores enter the event queue
-        snrt_cluster_hw_barrier();
-        eu_event_loop(core_idx);
+        snrt_cluster_hw_barrier(); 
+        eu_event_loop(cluster_core_idx);
         return 1;
     }
 }

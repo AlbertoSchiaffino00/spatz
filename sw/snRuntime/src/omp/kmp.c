@@ -21,7 +21,16 @@ typedef void (*__task_type64)(_kmp_ptr64, _kmp_ptr64, _kmp_ptr64);
  * number of arguments
  *
  */
-_kmp_ptr32 *kmpc_args;
+_kmp_ptr32 kmpc_args[KMP_FORK_MAX_NARGS];
+
+inline void writeboh(uint32_t val, uintptr_t addr)
+{
+	asm volatile("sw %0, 0(%1)"
+		     :
+		     : "r"(val), "r"((volatile uint32_t *)addr)
+		     : "memory");
+}
+
 
 static void __microtask_wrapper(void *arg, uint32_t argc) {
     kmp_int32 id = omp_get_thread_num();
@@ -152,6 +161,30 @@ void __kmpc_push_num_threads(ident_t *loc, kmp_int32 global_tid,
 #endif
 }
 
+
+void __kmpc_push_num_teams ( ident_t  *loc, kmp_int32 global_tid, kmp_int32 num_teams, kmp_int32 num_threads){
+    (void)loc;
+    (void)global_tid;
+    (void)num_teams;
+    (void)num_threads;
+    //TODO:implement it. At the moment every call has two teams with nbCores as threads
+#ifndef OMPSTATIC_NUMTHREADS
+    omp_t *omp = omp_getData();
+    omp->numTeams = num_teams;
+    if (omp->numTeams > omp->maxTeams) {
+        omp->numTeams = omp->maxTeams;
+    }
+    if(num_threads > 0){
+        omp->numThreads = num_threads;
+        if (omp->numThreads > omp->maxThreads) {
+            omp->numThreads = omp->maxThreads;
+        }
+    }
+#endif
+
+}
+
+
 /*!
 @ingroup PARALLEL
 @param loc  source location information
@@ -208,6 +241,25 @@ void __kmpc_fork_call(ident_t *loc, kmp_int32 argc, kmpc_micro microtask, ...) {
     // rt_free(args);
 }
 
+
+void __kmpc_fork_teams(ident_t *loc, kmp_int32 argc, kmpc_micro microtask, ...){
+    (void)loc;
+    _OMP_T *omp = omp_getData();
+    va_list vl;
+    int arg_size = 0;
+    arg_size = (argc + 1) * sizeof(_kmp_ptr32);
+    kmpc_args[0] = (_kmp_ptr32)microtask;
+    va_start(vl, microtask);
+    for (int i = 1; i <= argc; ++i) {
+        kmpc_args[i] = (_kmp_ptr32)va_arg(vl, _kmp_ptr32);
+    }
+    va_end(vl);
+    
+    mastersParallelRegion(argc, kmpc_args, __microtask_wrapper, omp->numTeams);
+    
+}
+
+
 /*!
 @ingroup WORK_SHARING
 @param    loc       Source code location
@@ -234,11 +286,14 @@ void __kmpc_for_static_init_4(ident_t *loc, kmp_int32 gtid,
                               kmp_int32 *plower, kmp_int32 *pupper,
                               kmp_int32 *pstride, kmp_int32 incr,
                               kmp_int32 chunk) {
+
+
     (void)loc;
     (void)gtid;
     _OMP_T *omp = omp_getData();
     _OMP_TEAM_T *team = omp_get_team(omp);
-    unsigned threadNum = omp_get_thread_num();
+    unsigned threadNum = omp_get_thread_num(); 
+    unsigned teamNum = omp_get_team_num(); //it is the ID
     kmp_uint32 loopSize = (*pupper - *plower) / incr + 1;
     kmp_int32 globalUpper = *pupper;
 
@@ -264,6 +319,12 @@ void __kmpc_for_static_init_4(ident_t *loc, kmp_int32 gtid,
 
     // no specified chunk size
     else if (sched == kmp_sch_static) {
+        if(omp->numTeams > 1){
+            *plower = omp->plainTeam.loop_start;
+            *pupper = omp->plainTeam.loop_end;
+            loopSize = (*pupper - *plower) / incr + 1;
+        }
+
         KMP_PRINTF(50, "    sched: static\n");
         chunk = loopSize / team->nbThreads;
         int leftOver = loopSize - chunk * team->nbThreads;
@@ -282,6 +343,32 @@ void __kmpc_for_static_init_4(ident_t *loc, kmp_int32 gtid,
 
         KMP_PRINTF(50, "    team thds: %d chunk: %d leftOver: %d\n",
                    team->nbThreads, chunk, leftOver);
+    
+
+    } 
+    
+    else if(sched == kmp_distribute_static){
+        
+        chunk = loopSize / omp->numTeams;
+        int leftOver = loopSize - chunk * omp->numTeams;
+
+        // calculate precise chunk size and lower and upper bound
+        if ((int)teamNum < leftOver) {
+            chunk++;
+            *plower = *plower + teamNum * chunk * incr;
+            omp->plainTeam.loop_start = *plower;
+        } else{
+            *plower = *plower + teamNum * chunk * incr + leftOver;
+            omp->plainTeam.loop_start = *plower;
+        }
+        *pupper = *plower + chunk * incr - incr;
+        omp->plainTeam.loop_end = *pupper;
+
+        if (plastiter != NULL){
+            *plastiter = (*pupper == globalUpper && *plower <= globalUpper);
+        }
+        *pstride = loopSize;
+
     }
 
     KMP_PRINTF(10,
@@ -508,5 +595,9 @@ int __kmpc_dispatch_next_4u(ident_t *loc, kmp_int32 gtid, kmp_int32 *p_last,
     *p_ub = p_ubi;
     return ret;
 }
+
+
+
+
 
 #endif  // #ifndef OMPSTATIC_NUMTHREADS

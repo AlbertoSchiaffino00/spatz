@@ -95,7 +95,12 @@ module spatz_cluster
     // value here. This only applies to the TCDM. The instruction cache macros will break!
     // In case you are using the `RegisterTCDMCuts` feature this adds an
     // additional cycle latency, which is taken into account here.
-    parameter int                     unsigned               MemoryMacroLatency                 = 1 + RegisterTCDMCuts
+    parameter int                     unsigned               MemoryMacroLatency                 = 1 + RegisterTCDMCuts,
+
+    //parameters bootrom
+    parameter logic [47:0] BaseAddr = 48'h51000000,
+    parameter logic [9:0] HartId = 10'h10
+  
   ) (
     /// System clock.
     input  logic                             clk_i,
@@ -1043,7 +1048,10 @@ module spatz_cluster
     .reg_rsp_i  (bootrom_reg_rsp          )
   );
 
-  bootrom i_bootrom (
+  bootrom #(
+    .BaseAddr (BaseAddr),
+    .HartId (HartId)
+  )i_bootrom (
     .clk_i  (clk_i                        ),
     .req_i  (bootrom_reg_req.valid        ),
     .addr_i (addr_t'(bootrom_reg_req.addr)),

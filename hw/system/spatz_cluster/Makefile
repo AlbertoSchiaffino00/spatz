@@ -12,16 +12,19 @@ MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 MKFILE_DIR  := $(dir $(MKFILE_PATH))
 
 # Configuration file
-SPATZ_CLUSTER_CFG ?= $(SPATZ_CLUSTER_DIR)/cfg/spatz_cluster.default.hjson
+SPATZ_CLUSTER_CFG ?= $(SPATZ_CLUSTER_DIR)/cfg/carfield_spatz.hjson
 SPATZ_CFG_NAME_SPLIT :=  $(subst /, ,$(SPATZ_CLUSTER_CFG))
 SPATZ_CFG_FILENAME:= $(word $(words $(SPATZ_CFG_NAME_SPLIT)), $(SPATZ_CFG_NAME_SPLIT))
+SPATZD_CL ?= cl1
+
+PYTHON=python3
 
 # Putchar utilization
 # The Standalone cluster uses the Host-Target Interface HTIF for printing messages
 # When the spatz cluster is integrated within an SoC, the HTIF could not be available and the regression test get stuck on the putchar function because of the missing comunication between the clients
 # When the HTIF is not available, set the following param to "NO"
 
-HTIF_SERVER ?= YES
+HTIF_SERVER ?= NO
 
 # Include Makefrag
 include $(ROOT)/util/Makefrag
@@ -72,20 +75,39 @@ VLT_COBJ += $(VLT_BUILDDIR)/vlt/verilated_vcd_c.o
 # Prerequisites #
 #################
 
-test/bootrom.elf test/bootrom.dump test/bootrom.bin: src/generated/spatz_cluster_wrapper.sv test/bootrom.S test/bootrom.ld Makefile
-	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-gcc -mabi=ilp32 -march=rv32imaf -static -nostartfiles -Ttest/bootrom.ld test/bootrom.S test/bootdata_bootrom.cc -I../../ip/snitch_test/src -I../../../sw/snRuntime/include -o test/bootrom.elf
-	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-objdump -D test/bootrom.elf > test/bootrom.dump
-	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-objcopy -O binary test/bootrom.elf test/bootrom.bin
+.PHONY: clean_project
+clean_project:
+	rm -rf src/generated_cl1
+	rm -rf src/generated_cl2
+
+
+.PHONY: generate_project
+generate_project:
+	$(MAKE) src/generated/spatz_cluster_wrapper.sv SPATZ_CLUSTER=cl1 
+	$(MAKE) compile_bootrom	SPATZ_CLUSTER=cl1
+	$(MAKE) bootrom SPATZ_CLUSTER=cl1
+	$(MAKE) src/generated/spatz_cluster_wrapper.sv SPATZ_CLUSTER=cl2 SPATZ_CLUSTER_CFG=$(SPATZ_CLUSTER_DIR)/cfg/carfield_spatzcl2.hjson
+	$(MAKE) compile_bootrom	SPATZ_CLUSTER=cl2 SPATZ_CLUSTER_CFG=$(SPATZ_CLUSTER_DIR)/cfg/carfield_spatzcl2.hjson
+	$(MAKE) bootrom SPATZ_CLUSTER=cl2 SPATZ_CLUSTER_CFG=$(SPATZ_CLUSTER_DIR)/cfg/carfield_spatzcl2.hjson
+	@echo 1
+
+compile_bootrom: test/bootrom.S test/bootrom.ld Makefile
+	mkdir -p src/generated_$(SPATZ_CLUSTER)/bootrom
+	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-gcc -mabi=ilp32 -march=rv32imaf --static -nostartfiles -Ttest/bootrom.ld test/bootrom.S src/generated_$(SPATZ_CLUSTER)/bootdata_bootrom_$(SPATZ_CLUSTER).cc -I../../ip/snitch_test/src -I../../../sw/snRuntime/include -o src/generated_$(SPATZ_CLUSTER)/bootrom/bootrom_$(SPATZ_CLUSTER).elf
+	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-objdump -D src/generated_$(SPATZ_CLUSTER)/bootrom/bootrom_$(SPATZ_CLUSTER).elf > src/generated_$(SPATZ_CLUSTER)/bootrom/bootrom_$(SPATZ_CLUSTER).dump
+	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-objcopy -O binary src/generated_$(SPATZ_CLUSTER)/bootrom/bootrom_$(SPATZ_CLUSTER).elf src/generated_$(SPATZ_CLUSTER)/bootrom/bootrom_$(SPATZ_CLUSTER).bin
+	@echo 2
 
 .PHONY: bootrom
-bootrom: $(CURDIR)/src/generated/bootrom.sv
-$(CURDIR)/src/generated/bootrom.sv: test/bootrom.bin
-	${PYTHON} $(SPATZ_DIR)/util/generate_bootrom.py test/bootrom.bin -c ${SPATZ_CLUSTER_CFG} --output src/generated/bootrom.sv
+bootrom:
+	${PYTHON} $(SPATZ_DIR)/util/generate_bootrom.py src/generated_$(SPATZ_CLUSTER)/bootrom/bootrom_$(SPATZ_CLUSTER).bin -c ${SPATZ_CLUSTER_CFG} --output src/generated_$(SPATZ_CLUSTER)/bootrom_$(SPATZ_CLUSTER).sv
+	@echo 3
 
 .PHONY: generate
 generate: src/generated/spatz_cluster_wrapper.sv
 src/generated/spatz_cluster_wrapper.sv: ${SPATZ_CLUSTER_CFG} $(find src/tpl) $(find test/*tpl)
-	${PYTHON} ${SPATZ_DIR}/util/clustergen.py -c ${SPATZ_CLUSTER_CFG} -o src/
+	${PYTHON} ${SPATZ_DIR}/util/clustergen.py -c ${SPATZ_CLUSTER_CFG} -o src/ -i $(SPATZ_CLUSTER)
+	@echo 4
 
 #############
 # Verilator #
@@ -127,10 +149,10 @@ clean.vlt:
 # Modelsim #
 ############
 
-${VSIM_BUILDDIR}/compile.vsim.tcl: test/bootrom.bin $(VSIM_SOURCES) ${TB_SRCS} ${TB_DIR}/rtl_lib.cc ${TB_DIR}/common_lib.cc test/bootdata.cc test/bootrom.bin
+${VSIM_BUILDDIR}/compile.vsim.tcl: test/bootrom.bin $(VSIM_SOURCES) ${TB_SRCS} ${TB_DIR}/rtl_lib.cc ${TB_DIR}/common_lib.cc test/bootdata_${SPATZD_CL}.cc test/bootrom.bin
 	vlib $(dir $@)
 	${BENDER} script vsim ${VSIM_BENDER} ${DEFS} --vlog-arg="${VLOG_FLAGS} -work $(dir $@) " > $@
-	echo '${VLOG} -work $(dir $@) ${TB_DIR}/rtl_lib.cc ${TB_DIR}/common_lib.cc test/bootdata.cc -ccflags "-std=c++17 -I${MKFILE_DIR}/test -I${MKFILE_DIR}/work/include -I${TB_DIR}"' >> $@
+	echo '${VLOG} -work $(dir $@) ${TB_DIR}/rtl_lib.cc ${TB_DIR}/common_lib.cc test/bootdata_${SPATZD_CL}.cc -ccflags "-std=c++17 -I${MKFILE_DIR}/test -I${MKFILE_DIR}/work/include -I${TB_DIR}"' >> $@
 	echo '${VLOG} -work $(dir $@) test/uartdpi/uartdpi.c -ccflags "-Itest/uartdpi"' >> $@
 	echo 'return 0' >> $@
 
@@ -177,14 +199,14 @@ lint/tmp/files: ${BENDER}
 ## Build SW into sw/build with the LLVM toolchain
 sw: clean.sw
 	mkdir -p sw/build
-	cd sw/build && ${CMAKE} -DLLVM_PATH=${LLVM_INSTALL_DIR} -DGCC_PATH=${GCC_INSTALL_DIR} -DHTIF_SERVER=${HTIF_SERVER}-DSPATZ_CFG_FILENAME=${SPATZ_CFG_FILENAME} -DPYTHON=${PYTHON} .. && make
+	cd sw/build && ${CMAKE} -DLLVM_PATH=${LLVM_INSTALL_DIR} -DGCC_PATH=${GCC_INSTALL_DIR} -DHTIF_SERVER=${HTIF_SERVER} -DSPATZ_CFG_FILENAME=${SPATZ_CFG_FILENAME} -DPYTHON=${PYTHON} -DBUILD_TESTS=ON .. && make
 
 # VSIM
 ## Build SW into sw/build with the LLVM toolchain (including tests) for Questasim simulator
-sw.vsim: clean.sw bin/spatz_cluster.vsim
+sw.vsim:  bin/spatz_cluster.vsim
 	mkdir -p sw/build
-	cd sw/build && ${CMAKE} -DLLVM_PATH=${LLVM_INSTALL_DIR} -DGCC_PATH=${GCC_INSTALL_DIR} -DHTIF_SERVER=${HTIF_SERVER} -DSPATZ_CFG_FILENAME=${SPATZ_CFG_FILENAME} -DPYTHON=${PYTHON} -DSNITCH_SIMULATOR=../../../../../hw/system/spatz_cluster/bin/spatz_cluster.vsim -DBUILD_TESTS=ON .. && make -j8
-	echo -e "\033[31m ***IMPORTANT*** SW compilation has done for the following config file: "$(SPATZ_CFG_FILENAME)
+	cd sw/build && ${CMAKE} -DLLVM_PATH=${LLVM_INSTALL_DIR} -DGCC_PATH=${GCC_INSTALL_DIR} -DHTIF_SERVER=${HTIF_SERVER} -DSPATZ_CFG_FILENAME=${SPATZ_CFG_FILENAME} -DPYTHON=${PYTHON} -DSNITCH_SIMULATOR=../../../../hw/system/spatz_cluster/bin/spatz_cluster.vsim -DBUILD_TESTS=ON .. && make -j8
+	echo -e "***IMPORTANT*** SW compilation has done for the following config file: "$(SPATZ_CFG_FILENAME) 
 
 ## Build SW and run all tests with Questasim simulator
 sw.test.vsim: sw.vsim

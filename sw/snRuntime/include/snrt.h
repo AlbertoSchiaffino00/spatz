@@ -284,6 +284,7 @@ static inline void snrt_mutex_release(volatile uint32_t *pmtx) {
  * @brief Destroy an OpenMP session so all cores exit cleanly
  */
 #define __snrt_omp_destroy(core_idx) \
+    teams_exit(core_idx);            \
     eu_exit(core_idx);               \
     dm_exit();                       \
     snrt_cluster_hw_barrier();

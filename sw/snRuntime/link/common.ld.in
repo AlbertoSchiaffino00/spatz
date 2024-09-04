@@ -8,6 +8,9 @@ ENTRY(_start)
 MEMORY
 {
     DRAM (rwxa)  : ORIGIN = @MEM_DRAM_ORIGIN@, LENGTH = @MEM_DRAM_SIZE@
+    L1_0 (rwxa)  : ORIGIN = 0x51000000,        LENGTH = 0x20000
+    L1_1 (rwxa)  : ORIGIN = 0x52000000,        LENGTH = 0x20000
+
 }
 
 SECTIONS
@@ -15,7 +18,11 @@ SECTIONS
   /* The program code and other data goes into DRAM */
   .text :
   {
+
+    BOOTDATA = 0x00001048;
+    
     . = ALIGN(4);
+    *(.init)
     *(.text.init)
     *(.text.startup)
     *(.text)
@@ -108,4 +115,16 @@ SECTIONS
     *(.dram)
     _edram = .;
   } >DRAM
+
+  .l1_0 :
+  {
+    *(.l1_0)
+    _el1_0 = .;
+  } >L1_0
+
+  .l1_1 :
+  {
+    *(.l1_1)
+    _el1_1 = .;
+  } >L1_1
 }

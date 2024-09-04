@@ -61,6 +61,8 @@ add_library(dp-faxpy dp-faxpy/kernel/faxpy.c)
 
 add_library(dp-fdotp dp-fdotp/kernel/fdotp.c)
 
+
+
 add_library(dp-fconv2d dp-fconv2d/kernel/fconv2d.c)
 
 add_library(dp-fft dp-fft/kernel/fft.c)
@@ -110,3 +112,5 @@ add_spatz_test_twoParam(dp-fft dp-fft/main.c 128 2)
 
 add_spatz_test_twoParam(sp-fft sp-fft/main.c 256 2)
 add_spatz_test_twoParam(sp-fft sp-fft/main.c 512 2)
+
+add_library(omptarget omptarget/main.c omptarget/sw_mailbox.c)

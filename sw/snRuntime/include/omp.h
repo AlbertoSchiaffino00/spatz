@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 
+#include "sync_teams.h"
 #include "eu.h"
 #include "kmp.h"
 #include "snrt.h"
@@ -69,11 +70,15 @@ typedef struct {
 #endif
 } omp_team_t;
 
+
 typedef struct {
 #ifndef OMPSTATIC_NUMTHREADS
     omp_team_t plainTeam;
     int numThreads;
     int maxThreads;
+    int numTeams;
+    int maxTeams;
+    int teamId;
 #else
     const omp_team_t plainTeam;
     const int numThreads;
@@ -91,7 +96,8 @@ typedef struct {
      * thus we reserve a chunk of arguments in TCDM and use it. This limits the
      * maximum number of arguments
      */
-    _kmp_ptr32 *kmpc_args;
+    _kmp_ptr32 kmpc_args[KMP_FORK_MAX_NARGS];
+
 } omp_t;
 
 #ifdef OPENMP_PROFILE
@@ -141,6 +147,10 @@ static inline unsigned omp_get_thread_num(void) {
     return snrt_cluster_core_idx();
 }
 
+static inline unsigned omp_get_team_num(void) {
+    return snrt_cluster_idx();
+}
+
 static inline void __attribute__((always_inline))
 parallelRegionExec(int32_t argc, void *data, void (*fn)(void *, uint32_t),
                    int num_threads) {
@@ -154,4 +164,21 @@ static inline void __attribute__((always_inline))
 parallelRegion(int32_t argc, void *data, void (*fn)(void *, uint32_t),
                int num_threads) {
     partialParallelRegion(argc, data, fn, num_threads);
+}
+
+inline void boh(uint32_t val, uintptr_t addr)
+{
+	asm volatile("sw %0, 0(%1)"
+		     :
+		     : "r"(val), "r"((volatile uint32_t *)addr)
+		     : "memory");
+}
+
+static inline void __attribute__((always_inline))
+mastersParallelRegion(int32_t argc, void *data, void (*fn)(void *, uint32_t), int num_teams) {
+
+
+    (void)teams_dispatch_push(fn, argc, data, num_teams);
+
+    teams_run_empty(snrt_global_core_idx());
 }

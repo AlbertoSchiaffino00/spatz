@@ -8,6 +8,24 @@
 
 #include "printf.h"
 #include "snrt.h"
+inline void writeboh(uint32_t val, uintptr_t addr)
+{
+	asm volatile("sw %0, 0(%1)"
+		     :
+		     : "r"(val), "r"((volatile uint32_t *)addr)
+		     : "memory");
+}
+
+static inline uint32_t readboh(const uintptr_t addr)
+{
+	uint32_t val;
+
+	asm volatile("lw %0, 0(%1)"
+		     : "=r"(val)
+		     : "r"((const volatile uint32_t *)addr)
+		     : "memory");
+	return val;
+}
 
 //================================================================================
 // Settings
@@ -54,7 +72,9 @@ __thread volatile eu_t *eu_p;
  * @brief Pointer to where the DM struct in TCDM is located
  *
  */
-static volatile eu_t *volatile eu_p_global;
+static volatile eu_t *volatile eu_p_global_cl1;
+static volatile eu_t *volatile eu_p_global_cl2;
+
 
 //================================================================================
 // prototypes
@@ -72,11 +92,18 @@ void eu_init(void) {
         eu_p = snrt_l1alloc(sizeof(eu_t));
         snrt_memset((void *)eu_p, 0, sizeof(eu_t));
         // store copy of eu_p on shared memory
-        eu_p_global = eu_p;
+        if (cluster_idx == 0) eu_p_global_cl1 = eu_p;
+        else  eu_p_global_cl2 = eu_p;
     } else {
-        while (!eu_p_global)
-            ;
-        eu_p = eu_p_global;
+        if(cluster_idx ==0){
+            while (!eu_p_global_cl1)
+                ;
+            eu_p = eu_p_global_cl1;
+        }else{
+            while (!eu_p_global_cl2)
+                ;
+            eu_p = eu_p_global_cl2;
+        }
     }
 }
 
@@ -196,6 +223,7 @@ int eu_dispatch_push(void (*fn)(void *, uint32_t), uint32_t argc, void *data,
  * @details
  */
 void eu_run_empty(uint32_t core_idx) {
+    uint32_t address = 0x7800c100 + snrt_global_core_idx()*4;
     unsigned nfini, scratch;
     scratch = eu_p->e.nthreads;
     if (!scratch) return;
@@ -210,14 +238,19 @@ void eu_run_empty(uint32_t core_idx) {
         EU_PRINTF(0, "run fn @ %#x (arg 0 = %#x)\n", eu_p->e.fn,
                   ((uint32_t *)eu_p->e.data)[0]);
         eu_p->e.fn(eu_p->e.data, eu_p->e.argc);
+
     }
 
     // wait for queue to be empty
     if (scratch > 1) {
+
         scratch = eu_get_workers_in_loop();
+
+
         while (__atomic_load_n(&eu_p->e.fini_count, __ATOMIC_RELAXED) !=
                scratch)
             ;
+
     }
 
     // stop workers from re-executing the task
@@ -241,9 +274,11 @@ inline void eu_mutex_release() { snrt_mutex_release(&eu_p->workers_mutex); }
 //================================================================================
 
 static void wait_worker_wfi(void) {
+
     uint32_t scratch = eu_p->workers_in_loop;
     while (__atomic_load_n(&eu_p->workers_wfi, __ATOMIC_RELAXED) != scratch)
         ;
+
 }
 
 /**

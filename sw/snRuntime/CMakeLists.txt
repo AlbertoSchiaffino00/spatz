@@ -33,11 +33,18 @@ if(SNITCH_RUNTIME STREQUAL "snRuntime-cluster")
         set(MEM_TCDM_ORIGIN "0x100000" CACHE STRING "Base address of TCDM memory")
         set(MEM_TCDM_SIZE "0x20000" CACHE STRING "Size of TCDM memory")
 
-    else(${SPATZ_CFG_FILENAME} STREQUAL carfield.hjson)
+    elseif(${SPATZ_CFG_FILENAME} STREQUAL carfield_spatzd.hjson)
+        set(MEM_DRAM_ORIGIN "0x78000000" CACHE STRING "Base address of external memory")
+        set(MEM_DRAM_SIZE "0x100000" CACHE STRING "Size of external memory")
+
+        set(MEM_TCDM_ORIGIN "0x51000000" CACHE STRING "Base address of TCDM memory")
+        set(MEM_TCDM_SIZE "0x20000" CACHE STRING "Size of TCDM memory")
+
+    else(${SPATZ_CFG_FILENAME} STREQUAL carfield_spatzdcl2.hjson)
         set(MEM_DRAM_ORIGIN "0x78000000" CACHE STRING "Base address of external memory")
         set(MEM_DRAM_SIZE "0x400000" CACHE STRING "Size of external memory")
 
-        set(MEM_TCDM_ORIGIN "0x51000000" CACHE STRING "Base address of TCDM memory")
+        set(MEM_TCDM_ORIGIN "0x52000000" CACHE STRING "Base address of TCDM memory")
         set(MEM_TCDM_SIZE "0x20000" CACHE STRING "Size of TCDM memory")
     endif()
 else()
@@ -55,8 +62,9 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/link/common.ld.in common.ld @ONLY)
 set(LINKER_SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/common.ld CACHE PATH "")
 
 # Start Snitch
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/platforms/rtl/start_snitch.S.in ${CMAKE_CURRENT_SOURCE_DIR}/src/platforms/rtl/start_snitch.S @ONLY)
-set(START_SNITCH ${CMAKE_CURRENT_BINARY_DIR}/src/platforms/rtl/start_snitch.S CACHE PATH "")
+# implemented in the shared start.S
+# configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/platforms/rtl/start_snitch.S.in ${CMAKE_CURRENT_SOURCE_DIR}/src/platforms/rtl/start_snitch.S @ONLY)
+# set(START_SNITCH ${CMAKE_CURRENT_BINARY_DIR}/src/platforms/rtl/start_snitch.S CACHE PATH "")
 
 # Patch putchar
 if(${HTIF_SERVER} STREQUAL "YES")
@@ -102,6 +110,13 @@ set(standalone_snitch_sources
     src/platforms/standalone/putchar.c
 )
 
+set(carfield_snitch_sources
+    src/platforms/shared/start_snitch.S
+    # src/platforms/rtl/start_snitch.S
+    src/platforms/rtl/putchar.c
+)
+
+
 # Sources only compatible with the LLVM toolchain
 if (CMAKE_C_COMPILER_ID STREQUAL "Clang")
     set(sources
@@ -111,6 +126,7 @@ if (CMAKE_C_COMPILER_ID STREQUAL "Clang")
         src/omp/kmp.c
         src/omp/eu.c
         src/dm.c
+        src/omp/sync_teams.c
     )
     # Check if static OpenMP runtime is requested
     if(OMPSTATIC_NUMTHREADS GREATER 0)
@@ -128,7 +144,7 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     add_snitch_library(snRuntime src/start.S ${sources})
 
     # Bare Runtimes (with startup code)
-    add_snitch_library(snRuntime-cluster src/platforms/shared/start.c ${standalone_snitch_sources} ${sources})
+    add_snitch_library(snRuntime-cluster src/platforms/shared/start.c ${carfield_snitch_sources} ${sources})
 
 
 else()
@@ -138,7 +154,7 @@ else()
         add_snitch_library(snRuntime src/platforms/shared/start.c src/start.S ${sources})
     # Bare Runtimes (with startup code)
     elseif(SNITCH_RUNTIME STREQUAL "snRuntime-cluster")
-        add_snitch_library(snRuntime-cluster src/platforms/shared/start.c ${standalone_snitch_sources} ${sources})
+        add_snitch_library(snRuntime-cluster src/platforms/shared/start.c ${carfield_snitch_sources} ${sources})
     else()
         message(FATAL_ERROR "Requested runtime not implemented: ${SNITCH_RUNTIME}")
     endif()
@@ -151,6 +167,7 @@ set(SNITCH_TEST_PREFIX snRuntime-)
 # General snRuntime tests
 add_snitch_test(tls tests/tls.c)
 add_snitch_test(simple tests/simple.c)
+add_snitch_test(while tests/while.c)
 add_snitch_test(varargs_1 tests/varargs_1.c)
 add_snitch_test(varargs_2 tests/varargs_2.c)
 add_snitch_test(barrier tests/barrier.c)
