@@ -65,7 +65,7 @@ void omp_init(void) {
 
         omp_p->numTeams = 2;
         omp_p->maxTeams = 2;
-        omp_p->teamId = (cluster_idx == 0) ? 0 : 1;
+        omp_p->teamId = (snrt_cluster_idx() == 0) ? 0 : 1;
 
         for (int i = 0; i < sizeof(omp_p->plainTeam.core_epoch) /
                                 sizeof(omp_p->plainTeam.core_epoch[0]);
@@ -77,14 +77,14 @@ void omp_init(void) {
             (struct snrt_barrier *)snrt_l1alloc(sizeof(struct snrt_barrier));
         snrt_memset(omp_p->kmpc_barrier, 0, sizeof(struct snrt_barrier));
         // Exchange omp pointer with other cluster cores
-        if (cluster_idx == 0) omp_p_global_cl1 = omp_p;
+        if (snrt_cluster_idx() == 0) omp_p_global_cl1 = omp_p;
         else  omp_p_global_cl2 = omp_p;
 #else
         omp_p.kmpc_barrier =
             (struct snrt_barrier *)snrt_l1alloc(sizeof(struct snrt_barrier));
         snrt_memset(omp_p.kmpc_barrier, 0, sizeof(struct snrt_barrier));
         // Exchange omp pointer with other cluster cores
-        if (cluster_idx == 0) omp_p_global_cl1 = &omp_p;
+        if (snrt_cluster_idx() == 0) omp_p_global_cl1 = &omp_p;
         else  omp_p_global_cl2 = &omp_p;
 #endif
 
@@ -93,7 +93,7 @@ void omp_init(void) {
 #endif
 
     } else {
-        if(cluster_idx ==0){
+        if(snrt_cluster_idx() ==0){
             while (!omp_p_global_cl1)
                 ;
 #ifndef OMPSTATIC_NUMTHREADS

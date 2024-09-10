@@ -20,13 +20,9 @@
 /***********************************************************************************
  * DATA
  ***********************************************************************************/
-volatile struct ring_buf *g_a2h_rb_cl1;
-volatile struct ring_buf *g_a2h_mbox_cl1;
-volatile struct ring_buf *g_h2a_mbox_cl1;
-volatile struct ring_buf *g_a2h_rb_cl2;
-volatile struct ring_buf *g_a2h_mbox_cl2;
-volatile struct ring_buf *g_h2a_mbox_cl2;
-__thread uint32_t cluster_idx;
+volatile struct ring_buf *g_a2h_rb;
+volatile struct ring_buf *g_a2h_mbox;
+volatile struct ring_buf *g_h2a_mbox;
 
 /***********************************************************************************
  * FUNCTIONS
@@ -38,7 +34,7 @@ int syscall(uint64_t which, uint64_t arg0, uint64_t arg1, uint64_t arg2,
     int ret;
     uint32_t retries = 0;
 
-    volatile struct ring_buf *rb = (cluster_idx == 0 ) ? g_a2h_rb_cl1 : g_a2h_rb_cl2;
+    volatile struct ring_buf *rb = g_a2h_rb;
 
     magic_mem[0] = which;
     magic_mem[1] = arg0;
@@ -64,14 +60,14 @@ void snrt_hero_exit(int code) { syscall(SYS_exit, code, 0, 0, 0, 0); }
  ***********************************************************************************/
 
 int mailbox_try_read(uint32_t *buffer) {
-    int ret_value = (cluster_idx == 0 ) ? rb_device_get(g_h2a_mbox_cl1, buffer) : rb_device_get(g_h2a_mbox_cl2, buffer);
+    int ret_value = rb_device_get(g_h2a_mbox, buffer);
     return ret_value == 0 ? 1 : 0;
 }
 int mailbox_read(uint32_t *buffer, size_t n_words) {
     int ret;
     while (n_words--) {
         do {
-            ret = (cluster_idx == 0) ? rb_device_get(g_h2a_mbox_cl1, &buffer[n_words]) : rb_device_get(g_h2a_mbox_cl2, &buffer[n_words]);
+            ret = rb_device_get(g_h2a_mbox, &buffer[n_words]);
             if (ret) {
                 csleep(10);
             }
@@ -82,7 +78,7 @@ int mailbox_read(uint32_t *buffer, size_t n_words) {
 int mailbox_write(uint32_t word) {
     int ret;
     do {
-        ret = (cluster_idx == 0 ) ? rb_device_put(g_a2h_mbox_cl1, &word) : rb_device_put(g_a2h_mbox_cl2, &word);
+        ret = rb_device_put(g_a2h_mbox, &word);
         if (ret) {
             csleep(10);
         }

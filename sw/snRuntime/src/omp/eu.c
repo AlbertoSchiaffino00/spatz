@@ -5,7 +5,6 @@
 #include "eu.h"
 
 #include <stdlib.h>
-
 #include "printf.h"
 #include "snrt.h"
 inline void writeboh(uint32_t val, uintptr_t addr)
@@ -91,11 +90,12 @@ void eu_init(void) {
         // Allocate the eu struct in L1 for fast access
         eu_p = snrt_l1alloc(sizeof(eu_t));
         snrt_memset((void *)eu_p, 0, sizeof(eu_t));
+
         // store copy of eu_p on shared memory
-        if (cluster_idx == 0) eu_p_global_cl1 = eu_p;
+        if (snrt_cluster_idx() == 0) eu_p_global_cl1 = eu_p;
         else  eu_p_global_cl2 = eu_p;
     } else {
-        if(cluster_idx ==0){
+        if(snrt_cluster_idx() ==0){
             while (!eu_p_global_cl1)
                 ;
             eu_p = eu_p_global_cl1;
@@ -185,7 +185,6 @@ void eu_event_loop(uint32_t cluster_core_idx) {
             // call
             eu_p->e.fn(eu_p->e.data, eu_p->e.argc);
         }
-
         // enter wait for interrupt
         __atomic_add_fetch(&eu_p->e.fini_count, 1, __ATOMIC_RELAXED);
         worker_wfi(cluster_core_idx);
@@ -223,7 +222,6 @@ int eu_dispatch_push(void (*fn)(void *, uint32_t), uint32_t argc, void *data,
  * @details
  */
 void eu_run_empty(uint32_t core_idx) {
-    uint32_t address = 0x7800c100 + snrt_global_core_idx()*4;
     unsigned nfini, scratch;
     scratch = eu_p->e.nthreads;
     if (!scratch) return;

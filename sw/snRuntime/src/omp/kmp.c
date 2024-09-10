@@ -21,7 +21,9 @@ typedef void (*__task_type64)(_kmp_ptr64, _kmp_ptr64, _kmp_ptr64);
  * number of arguments
  *
  */
-_kmp_ptr32 kmpc_args[KMP_FORK_MAX_NARGS];
+_kmp_ptr32 kmpc_teams_args[KMP_FORK_MAX_NARGS];
+_kmp_ptr32 kmpc_team0_args[KMP_FORK_MAX_NARGS];
+_kmp_ptr32 kmpc_team1_args[KMP_FORK_MAX_NARGS];
 
 inline void writeboh(uint32_t val, uintptr_t addr)
 {
@@ -198,7 +200,8 @@ Do the actual fork and call the microtask in the relevant number of threads.
 void __kmpc_fork_call(ident_t *loc, kmp_int32 argc, kmpc_micro microtask, ...) {
     (void)loc;
     _OMP_T *omp = omp_getData();
-
+    _kmp_ptr32 * local_kmps_args;
+    local_kmps_args = (omp->teamId == 0) ? &kmpc_team0_args : &kmpc_team1_args;
     OMP_PROF(omp_prof->fork_oh = read_csr(mcycle));
 
     va_list vl;
@@ -210,11 +213,11 @@ void __kmpc_fork_call(ident_t *loc, kmp_int32 argc, kmpc_micro microtask, ...) {
     // void *args = rt_malloc(arg_size); for(int i = 0; i < arg_size;
     // i ++) ((uint8_t*)args)[i]=0;
     // first element holds pointer to the microtask
-    kmpc_args[0] = (_kmp_ptr32)microtask;
+    local_kmps_args[0] = (_kmp_ptr32)microtask;
     // copy remaining varargs
     va_start(vl, microtask);
     for (int i = 1; i <= argc; ++i) {
-        kmpc_args[i] = (_kmp_ptr32)va_arg(vl, _kmp_ptr32);
+        local_kmps_args[i] = (_kmp_ptr32)va_arg(vl, _kmp_ptr32);
     }
     va_end(vl);
 
@@ -232,10 +235,10 @@ void __kmpc_fork_call(ident_t *loc, kmp_int32 argc, kmpc_micro microtask, ...) {
         /// this thread woul re-enter the event queue, run the newly dispatched
         /// thread and then return to this thread. If this is not done, the
         /// nested parallelism is not executed in the correct order
-        (void)eu_dispatch_push(__microtask_wrapper, argc, kmpc_args,
+        (void)eu_dispatch_push(__microtask_wrapper, argc, local_kmps_args,
                                omp->numThreads);
     } else {
-        parallelRegion(argc, kmpc_args, __microtask_wrapper, omp->numThreads);
+        parallelRegion(argc, local_kmps_args, __microtask_wrapper, omp->numThreads);
     }
 
     // rt_free(args);
@@ -248,14 +251,14 @@ void __kmpc_fork_teams(ident_t *loc, kmp_int32 argc, kmpc_micro microtask, ...){
     va_list vl;
     int arg_size = 0;
     arg_size = (argc + 1) * sizeof(_kmp_ptr32);
-    kmpc_args[0] = (_kmp_ptr32)microtask;
+    kmpc_teams_args[0] = (_kmp_ptr32)microtask;
     va_start(vl, microtask);
     for (int i = 1; i <= argc; ++i) {
-        kmpc_args[i] = (_kmp_ptr32)va_arg(vl, _kmp_ptr32);
+        kmpc_teams_args[i] = (_kmp_ptr32)va_arg(vl, _kmp_ptr32);
     }
     va_end(vl);
     
-    mastersParallelRegion(argc, kmpc_args, __microtask_wrapper, omp->numTeams);
+    mastersParallelRegion(argc, kmpc_teams_args, __microtask_wrapper, omp->numTeams);
     
 }
 
@@ -286,7 +289,6 @@ void __kmpc_for_static_init_4(ident_t *loc, kmp_int32 gtid,
                               kmp_int32 *plower, kmp_int32 *pupper,
                               kmp_int32 *pstride, kmp_int32 incr,
                               kmp_int32 chunk) {
-
 
     (void)loc;
     (void)gtid;

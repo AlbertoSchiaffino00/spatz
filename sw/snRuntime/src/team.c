@@ -7,7 +7,8 @@
 
 // TLS copy of frequently used data that doesn't change at runtime
 __thread struct snrt_team *_snrt_team_current;
-__thread uint32_t _snrt_core_idx;
+__thread uint32_t _snrt_cluster_core_idx;
+__thread uint32_t _snrt_global_core_idx;
 
 const uint32_t _snrt_team_size __attribute__((section(".rodata"))) =
     sizeof(struct snrt_team_root);
@@ -29,7 +30,8 @@ uint32_t snrt_cluster_core_base_hartid() {
 }
 
 uint32_t snrt_global_core_idx() {
-    return snrt_hartid() - _snrt_team_current->root->global_core_base_hartid;
+    return _snrt_global_core_idx;
+    // return snrt_hartid() - _snrt_team_current->root->global_core_base_hartid;
 }
 
 uint32_t snrt_global_core_num() {
@@ -40,7 +42,7 @@ uint32_t snrt_cluster_idx() { return _snrt_team_current->root->cluster_idx; }
 
 uint32_t snrt_cluster_num() { return _snrt_team_current->root->cluster_num; }
 
-uint32_t snrt_cluster_core_idx() { return _snrt_core_idx; }
+uint32_t snrt_cluster_core_idx() { return _snrt_cluster_core_idx; }
 
 uint32_t snrt_cluster_core_num() {
     return _snrt_team_current->root->cluster_core_num;

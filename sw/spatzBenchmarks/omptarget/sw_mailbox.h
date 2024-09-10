@@ -53,13 +53,9 @@ struct ring_buf {
 /***********************************************************************************
  * DATA
  ***********************************************************************************/
-extern volatile struct ring_buf *g_a2h_rb_cl1;
-extern volatile struct ring_buf *g_a2h_mbox_cl1;
-extern volatile struct ring_buf *g_h2a_mbox_cl1;
-extern volatile struct ring_buf *g_a2h_rb_cl2;
-extern volatile struct ring_buf *g_a2h_mbox_cl2;
-extern volatile struct ring_buf *g_h2a_mbox_cl2;
-__thread extern uint32_t cluster_idx;
+extern volatile struct ring_buf *g_a2h_rb;
+extern volatile struct ring_buf *g_a2h_mbox;
+extern volatile struct ring_buf *g_h2a_mbox;
 
 /***********************************************************************************
  * INLINES

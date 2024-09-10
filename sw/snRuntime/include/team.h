@@ -5,7 +5,8 @@
 #include "snrt.h"
 
 extern __thread struct snrt_team *_snrt_team_current;
-extern __thread uint32_t _snrt_core_idx;
+extern __thread uint32_t _snrt_cluster_core_idx;
+extern __thread uint32_t _snrt_global_core_idx;
 extern const uint32_t _snrt_team_size;
 
 struct snrt_team {

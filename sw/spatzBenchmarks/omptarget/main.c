@@ -319,15 +319,14 @@ int main(int argc, char *argv[]) {
   unsigned core_idx = snrt_cluster_core_idx();
   unsigned core_num = snrt_cluster_core_num();
   unsigned global_core_idx = snrt_global_core_idx();
-  cluster_idx = snrt_cluster_idx();
   /**
    * One core initializes the global data structures
    */
   if (global_core_idx == 0) {
     // read memory layout from scratch2
-    g_a2h_rb_cl1 = NULL;
-    g_h2a_mbox_cl1 =  (struct ring_buf *)readw(0x3000000); //h2a mailbox
-    g_a2h_mbox_cl1 =  (struct ring_buf *)readw(0x3000004); //a2h mailbox
+    g_a2h_rb = NULL;
+    g_h2a_mbox =  (struct ring_buf *)readw(0x3000000); //h2a mailbox
+    g_a2h_mbox =  (struct ring_buf *)readw(0x3000004); //a2h mailbox
     writew(0x1, 0x40000248); 
     writew(0x1, 0x40000208); 
     writew(0x1, 0x40000348); 
