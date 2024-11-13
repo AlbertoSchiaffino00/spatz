@@ -66,7 +66,7 @@ package spatz_cluster_pkg;
   localparam int unsigned ICacheLineCount = 128;
   localparam int unsigned ICacheSets = 2;
 
-  localparam int unsigned TCDMStartAddr = 48'h51000000;
+  localparam int unsigned TCDMStartAddr = 48'hx1;
   localparam int unsigned TCDMSize      = 48'h20000;
 
   localparam int unsigned PeriStartAddr = TCDMStartAddr + TCDMSize;
@@ -492,8 +492,8 @@ module spatz_cluster_wrapper
     .meip_i,
     .mtip_i,
     .msip_i,
-    .hart_base_id_i (10'h10),
-    .cluster_base_addr_i (48'h51000000),
+    .hart_base_id_i (10'hx1),
+    .cluster_base_addr_i (48'hx1),
     .axi_core_default_user_i (10'h7),
     .cluster_probe_o,
     // AXI Slave Port

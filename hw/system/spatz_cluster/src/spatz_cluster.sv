@@ -99,7 +99,9 @@ module spatz_cluster
 
     //parameters bootrom
     parameter logic [47:0] BaseAddr = 48'h51000000,
-    parameter logic [9:0] HartId = 10'h10
+    parameter logic [9:0] HartId = 10'h10,
+    parameter logic [47:0] PrivateBaseAddr = 48'h50000000
+
   
   ) (
     /// System clock.
@@ -182,7 +184,7 @@ module spatz_cluster
 
   // TCDM, Peripherals, SoC Request
   localparam int unsigned NrNarrowSlaves = 3;
-  localparam int unsigned NrNarrowRules  = NrNarrowSlaves - 1;
+  localparam int unsigned NrNarrowRules  = NrNarrowSlaves;
 
   // Core Request, DMA, Instruction cache
   localparam int unsigned NrWideMasters  = 3;
@@ -221,7 +223,7 @@ module spatz_cluster
     UniqueIds         : 1'b0,
     AxiAddrWidth      : AxiAddrWidth,
     AxiDataWidth      : AxiDataWidth,
-    NoAddrRules       : 2,
+    NoAddrRules       : 3,
     default           : '0
   };
 
@@ -357,12 +359,18 @@ module spatz_cluster
   // -----------
   // Calculate start and end address of TCDM based on the `cluster_base_addr_i`.
   addr_t tcdm_start_address, tcdm_end_address;
+  addr_t private_tcdm_start_address, private_tcdm_end_address;
   assign tcdm_start_address = (cluster_base_addr_i & TCDMMask);
   assign tcdm_end_address   = (tcdm_start_address + TCDMSize) & TCDMMask;
+  assign private_tcdm_start_address = PrivateBaseAddr;
+  assign private_tcdm_end_address   = PrivateBaseAddr + TCDMSize;
 
   addr_t cluster_periph_start_address, cluster_periph_end_address;
+  addr_t private_cluster_periph_start_address, private_cluster_periph_end_address;
   assign cluster_periph_start_address = tcdm_end_address;
   assign cluster_periph_end_address   = tcdm_end_address + ClusterPeriphSize * 1024;
+  assign private_cluster_periph_start_address = private_tcdm_end_address;
+  assign private_cluster_periph_end_address   = private_tcdm_end_address + ClusterPeriphSize * 1024;
 
   // ----------------
   // Wire Definitions
@@ -467,6 +475,11 @@ module spatz_cluster
       idx       : TCDMDMA,
       start_addr: tcdm_start_address,
       end_addr  : tcdm_end_address
+    },
+    '{
+      idx       : TCDMDMA,
+      start_addr: private_tcdm_start_address,
+      end_addr  : private_tcdm_end_address
     },
     '{
       idx       : BootROM,
@@ -864,7 +877,8 @@ module spatz_cluster
     .in_rsp_o                       (core_rsp                    ),
     .out_req_o                      (filtered_core_req           ),
     .out_rsp_i                      (filtered_core_rsp           ),
-    .cluster_periph_start_address_i (cluster_periph_start_address)
+    .cluster_periph_start_address_i (cluster_periph_start_address),
+    .private_cluster_periph_start_address_i (private_cluster_periph_start_address)
   );
 
   reqrsp_req_t core_to_axi_req;
@@ -919,6 +933,11 @@ module spatz_cluster
       idx       : ClusterPeripherals,
       start_addr: cluster_periph_start_address,
       end_addr  : cluster_periph_end_address
+    },
+    '{
+      idx       : ClusterPeripherals,
+      start_addr: private_cluster_periph_start_address,
+      end_addr  : private_cluster_periph_end_address
     }
   };
 

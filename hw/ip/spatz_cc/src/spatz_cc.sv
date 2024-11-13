@@ -88,7 +88,10 @@ module spatz_cc
     parameter int                          unsigned        NumSpatzFUs              = (NumSpatzFPUs > NumSpatzIPUs) ? NumSpatzFPUs : NumSpatzIPUs,
     parameter int                          unsigned        NumMemPortsPerSpatz      = NumSpatzFUs,
     parameter int                          unsigned        TCDMPorts                = RVV ? NumMemPortsPerSpatz + 1 : 1,
-    parameter type                                         addr_t                   = logic [AddrWidth-1:0]
+    parameter type                                         addr_t                   = logic [AddrWidth-1:0], 
+
+    parameter logic [47:0] PrivateBaseAddr = 48'h50000000
+ 
   ) (
     input  logic                         clk_i,
     input  logic                         clk_d2_i,
@@ -424,11 +427,18 @@ module spatz_cc
     logic [AddrWidth-1:0] mask;
   } reqrsp_rule_t;
 
-  reqrsp_rule_t addr_map;
+  reqrsp_rule_t [1:0] addr_map;
   assign addr_map = '{
-    idx : 1,
-    base: tcdm_addr_base_i,
-    mask: ({AddrWidth{1'b1}} << TCDMAddrWidth)
+    '{
+      idx : 1,
+      base: tcdm_addr_base_i,
+      mask: ({AddrWidth{1'b1}} << TCDMAddrWidth)
+    },
+    '{
+      idx : 1,
+      base: PrivateBaseAddr,
+      mask: ({AddrWidth{1'b1}} << TCDMAddrWidth)
+    }
   };
 
   addr_decode_napot #(

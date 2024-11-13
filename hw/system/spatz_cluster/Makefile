@@ -83,12 +83,12 @@ clean_project:
 
 .PHONY: generate_project
 generate_project:
-	$(MAKE) src/generated/spatz_cluster_wrapper.sv SPATZ_CLUSTER=cl1 
-	$(MAKE) compile_bootrom	SPATZ_CLUSTER=cl1
-	$(MAKE) bootrom SPATZ_CLUSTER=cl1
-	$(MAKE) src/generated/spatz_cluster_wrapper.sv SPATZ_CLUSTER=cl2 SPATZ_CLUSTER_CFG=$(SPATZ_CLUSTER_DIR)/cfg/carfield_spatzcl2.hjson
-	$(MAKE) compile_bootrom	SPATZ_CLUSTER=cl2 SPATZ_CLUSTER_CFG=$(SPATZ_CLUSTER_DIR)/cfg/carfield_spatzcl2.hjson
-	$(MAKE) bootrom SPATZ_CLUSTER=cl2 SPATZ_CLUSTER_CFG=$(SPATZ_CLUSTER_DIR)/cfg/carfield_spatzcl2.hjson
+	# $(MAKE) src/generated/spatz_cluster_wrapper.sv SPATZ_CLUSTER=cl1 
+	# $(MAKE) compile_bootrom	SPATZ_CLUSTER=cl1
+	# $(MAKE) bootrom SPATZ_CLUSTER=cl1
+	# $(MAKE) src/generated/spatz_cluster_wrapper.sv SPATZ_CLUSTER=cl2 SPATZ_CLUSTER_CFG=$(SPATZ_CLUSTER_DIR)/cfg/carfield_spatzcl2.hjson
+	# $(MAKE) compile_bootrom	SPATZ_CLUSTER=cl2 SPATZ_CLUSTER_CFG=$(SPATZ_CLUSTER_DIR)/cfg/carfield_spatzcl2.hjson
+	# $(MAKE) bootrom SPATZ_CLUSTER=cl2 SPATZ_CLUSTER_CFG=$(SPATZ_CLUSTER_DIR)/cfg/carfield_spatzcl2.hjson
 	@echo 1
 
 compile_bootrom: test/bootrom.S test/bootrom.ld Makefile

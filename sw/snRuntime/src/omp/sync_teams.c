@@ -110,7 +110,6 @@ void teams_event_loop(uint32_t global_core_idx){
     teams_p->masters_in_loop += 1;
 
     // snrt_interrupt_enable(IRQ_M_SOFT);
-
     while (1) {
 
 
@@ -136,6 +135,7 @@ void teams_event_loop(uint32_t global_core_idx){
         //__atomic_add_fetch(&teams_p->e.fini_count, 1, __ATOMIC_RELAXED);
         teams_p->e.fini_count += 1;
         master_wfi(global_core_idx);
+
 
     }
 }
@@ -216,7 +216,8 @@ static void wait_master_wfi(void) {
 static void wake_masters(void) {
     // wake all master cores except the main thread
     writeboh(1,0x40000804);
-    writeboh(0,0x40000808);
+    writeboh(1,0x40000808);
+    
 
 }
 

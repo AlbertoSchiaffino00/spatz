@@ -132,7 +132,7 @@ extern omp_prof_t *omp_prof;
 //================================================================================
 
 #ifndef OMPSTATIC_NUMTHREADS
-static inline omp_t *omp_getData() { return omp_p; }
+static inline omp_t *omp_getData() { return (__attribute__((address_space(1))) omp_t*) omp_p; }
 static inline omp_team_t *omp_get_team(omp_t *_this) {
     return &_this->plainTeam;
 }
@@ -164,14 +164,6 @@ static inline void __attribute__((always_inline))
 parallelRegion(int32_t argc, void *data, void (*fn)(void *, uint32_t),
                int num_threads) {
     partialParallelRegion(argc, data, fn, num_threads);
-}
-
-inline void boh(uint32_t val, uintptr_t addr)
-{
-	asm volatile("sw %0, 0(%1)"
-		     :
-		     : "r"(val), "r"((volatile uint32_t *)addr)
-		     : "memory");
 }
 
 static inline void __attribute__((always_inline))

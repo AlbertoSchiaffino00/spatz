@@ -10,6 +10,7 @@ MEMORY
     DRAM (rwxa)  : ORIGIN = @MEM_DRAM_ORIGIN@, LENGTH = @MEM_DRAM_SIZE@
     L1_0 (rwxa)  : ORIGIN = 0x51000000,        LENGTH = 0x20000
     L1_1 (rwxa)  : ORIGIN = 0x52000000,        LENGTH = 0x20000
+    L1 (rwxa)  : ORIGIN = 0x50000000,        LENGTH = 0x20000
 
 }
 
@@ -116,15 +117,27 @@ SECTIONS
     _edram = .;
   } >DRAM
 
-  .l1_0 :
+  .l1    :
+    {
+    *(.l1)
+    _el1 = .;
+  } >L1
+
+  _beginning_l1_0 = _el1 + 0x1000000;
+
+  .l1_0 _beginning_l1_0:
   {
     *(.l1_0)
     _el1_0 = .;
   } >L1_0
 
-  .l1_1 :
+  _beginning_l1_1 = _el1 + 0x2000000;
+
+  .l1_1 _beginning_l1_1:
   {
     *(.l1_1)
     _el1_1 = .;
   } >L1_1
+
+
 }

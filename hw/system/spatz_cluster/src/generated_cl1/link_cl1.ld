@@ -8,7 +8,7 @@ ENTRY(_start)
 MEMORY
 {
     DRAM (rwxai)  : ORIGIN = 2013265920, LENGTH = 4194304
-    L1 (rw) : ORIGIN = 1358954496, LENGTH = 128K
+    L1 (rw) : ORIGIN = -1, LENGTH = 128K
 }
 
 SECTIONS

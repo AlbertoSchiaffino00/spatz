@@ -4,6 +4,65 @@
 
 #include "../../start.S"
 #include <spatz_cluster_peripheral.h>
+#include <private_memory.h>
+
+
+#ifdef OPTIMIZED
+
+# Function to determine the initial cluster layout to setup the initial stack.
+# See `hw/system/snitch_cluster/test/tb_lib.hh` for details of the bootdata
+# layout. 
+# It also make the cluster busy by writing to the status register
+#
+# Expecting:
+# - a0: mhartid
+# - a1: device tree ptr ("bootdata" in `tb_lib.hh`)
+_snrt_init_core_info:
+    .globl _snrt_init_core_info
+    mv        a4, a1
+    lui       a2, %hi(PRIVATE_MEM_ADDR)  # start address of the TCDM
+
+    # Final address of the TCDM
+    lui     a3, %hi(END_PRIVATE_MEM_ADDR) #end current cluster TCDM
+
+    # Address of the STATUS register
+    addi       t3, a3, SPATZ_CLUSTER_PERIPHERAL_SPATZ_STATUS_REG_OFFSET
+
+    # Make cluster busy
+    li         t2, 1
+    sw         t2, 0(t3)
+
+    lw        a1, 4(a4)  # load the number of cores per cluster
+    lw        t0, 8(a4)  # load cluster's hartid offset
+    lw        t2, 20(a4) # offset between cluster TCDMs
+    sub       a0, a0, t0
+    div       t3, a0, a1 # calculate cluster index
+    mul       t4, t3, t2 # calculate cluster TCDM offset
+    remu      a0, a0, a1 # calculate cluster-local core id
+
+    ret
+
+
+# _snrt_cluster_barrier:
+#     .globl _snrt_cluster_barrier
+#     addi      sp, sp, -4
+#     sw        ra, 0(sp)
+#     call      _snrt_barrier_reg_ptr
+#     lw        a0, 0(a0)
+#     mv        zero, a0
+#     lw        ra, 0(sp)
+#     addi      sp, sp, 4
+#     ret
+
+_snrt_cluster_barrier:
+    .globl _snrt_cluster_barrier
+    lui      a0, %hi(END_PRIVATE_MEM_ADDR)
+    addi     a0, a0, SPATZ_CLUSTER_PERIPHERAL_HW_BARRIER_REG_OFFSET
+    lw       a0, 0(a0)
+    mv       zero, a0
+    ret
+
+#else
 
 # Function to determine the initial cluster layout to setup the initial stack.
 # See `hw/system/snitch_cluster/test/tb_lib.hh` for details of the bootdata
@@ -34,32 +93,23 @@ _snrt_init_core_info:
     sub       a0, a0, t0
     div       t3, a0, a1 # calculate cluster index
     mul       t4, t3, t2 # calculate cluster TCDM offset
-    add       a2, a2, t4 # start address of current cluster TCDM
-    add       a3, a2, t1 # end address of current cluster TCDM
     remu      a0, a0, a1 # calculate cluster-local core id
     ret
-
-
 
 # Must leave a0 untouched.
 _snrt_cluster_barrier:
     .globl _snrt_cluster_barrier
-    # addi      sp, sp, -4
-    # sw        ra, 0(sp)
-    # call      _snrt_barrier_reg_ptr
-    # lw        a0, 0(a0)
-    # mv        zero, a0
-    # lw        ra, 0(sp)
-    # addi      sp, sp, 4
-
-    la        t0, BOOTDATA
-    lw        t1, 12(t0) # start address of the TCDM
-    lw        t2, 16(t0) # size of TCDM address space
-    add       t1, t1, t2
-    addi      a0, t1, SPATZ_CLUSTER_PERIPHERAL_HW_BARRIER_REG_OFFSET
+    addi      sp, sp, -4
+    sw        ra, 0(sp)
+    call      _snrt_barrier_reg_ptr
     lw        a0, 0(a0)
     mv        zero, a0
+    lw        ra, 0(sp)
+    addi      sp, sp, 4
     ret
+
+#endif
+
 
 # Mustn't use any non-temporary registers
 # Expecting:
@@ -118,7 +168,6 @@ _snrt_exit:
     la        t2, tohost
     sw        t0, 0(t2)
 1:  ret
-
 
 
 # HTIF sections

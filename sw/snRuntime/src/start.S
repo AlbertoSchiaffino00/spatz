@@ -180,7 +180,9 @@ snrt.crt0.pre_barrier:
 
     # Execute the main function.
 snrt.crt0.main:
+    sw       t1, 0(t0)
     call      main  # main(int core_id, int core_num, void *spm_start, void *spm_end)
+    sw       t1, 0(t0)
     mv        s0, a0 # store return value in s0
     # lw        s0, tcdm_end_address_reg  # add return value to special slot
     # addi      s0, s0, -8

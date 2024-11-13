@@ -12,7 +12,7 @@
 
 typedef void (*kmpc_micro)(kmp_int32 *global_tid, kmp_int32 *bound_tid, ...);
 
-extern _kmp_ptr32 kmpc_args[KMP_FORK_MAX_NARGS];
+// extern _kmp_ptr32 kmpc_args[KMP_FORK_MAX_NARGS];
 
 ////////////////////////////////////////////////////////////////////////////////
 // debug

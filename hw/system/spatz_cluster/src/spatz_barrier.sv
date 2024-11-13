@@ -27,7 +27,8 @@ module spatz_barrier
   output dreq_t [NrPorts-1:0] out_req_o,
   input  drsp_t [NrPorts-1:0] out_rsp_i,
 
-  input  addr_t              cluster_periph_start_address_i
+  input  addr_t              cluster_periph_start_address_i,
+  input  addr_t              private_cluster_periph_start_address_i
 );
 
   typedef enum logic [1:0] {
@@ -51,9 +52,13 @@ module spatz_barrier
       case (state_q[i])
         Idle: begin
           if (in_req_i[i].q_valid &&
-            (in_req_i[i].q.addr ==
+            ((in_req_i[i].q.addr ==
                 cluster_periph_start_address_i +
-                SPATZ_CLUSTER_PERIPHERAL_HW_BARRIER_OFFSET)) begin
+                SPATZ_CLUSTER_PERIPHERAL_HW_BARRIER_OFFSET) || 
+              (in_req_i[i].q.addr ==
+                private_cluster_periph_start_address_i +
+                SPATZ_CLUSTER_PERIPHERAL_HW_BARRIER_OFFSET)
+                )) begin
             state_d[i] = Wait;
             out_req_o[i].q_valid = 0;
             in_rsp_o[i].q_ready  = 0;

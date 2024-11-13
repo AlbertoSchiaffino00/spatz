@@ -11,6 +11,10 @@
 #include "encoding.h"
 #include "omp.h"
 
+
+#define FN(fn, ...)  \
+    fn(__VA_ARGS__) 
+
 typedef void (*__task_type32)(_kmp_ptr32, _kmp_ptr32, _kmp_ptr32);
 typedef void (*__task_type64)(_kmp_ptr64, _kmp_ptr64, _kmp_ptr64);
 
@@ -25,6 +29,7 @@ _kmp_ptr32 kmpc_teams_args[KMP_FORK_MAX_NARGS];
 _kmp_ptr32 kmpc_team0_args[KMP_FORK_MAX_NARGS];
 _kmp_ptr32 kmpc_team1_args[KMP_FORK_MAX_NARGS];
 
+
 inline void writeboh(uint32_t val, uintptr_t addr)
 {
 	asm volatile("sw %0, 0(%1)"
@@ -37,7 +42,6 @@ inline void writeboh(uint32_t val, uintptr_t addr)
 static void __microtask_wrapper(void *arg, uint32_t argc) {
     kmp_int32 id = omp_get_thread_num();
     kmp_int32 *id_addr = (kmp_int32 *)(&id);
-
     // first element in args is the function pointer
     kmpc_micro fn = (kmpc_micro)((_kmp_ptr32 *)arg)[0];
     // second element in args is the pointer to the argument vector
@@ -82,17 +86,21 @@ static void __microtask_wrapper(void *arg, uint32_t argc) {
         case 8:
             fn(&gtid, id_addr, p_argv[0], p_argv[1], p_argv[2], p_argv[3],
                p_argv[4], p_argv[5], p_argv[6], p_argv[7]);
+            break;
         case 9:
             fn(&gtid, id_addr, p_argv[0], p_argv[1], p_argv[2], p_argv[3],
                p_argv[4], p_argv[5], p_argv[6], p_argv[7], p_argv[8]);
+            break;
         case 10:
             fn(&gtid, id_addr, p_argv[0], p_argv[1], p_argv[2], p_argv[3],
                p_argv[4], p_argv[5], p_argv[6], p_argv[7], p_argv[8],
                p_argv[9]);
+            break;
         case 11:
             fn(&gtid, id_addr, p_argv[0], p_argv[1], p_argv[2], p_argv[3],
                p_argv[4], p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9],
                p_argv[10]);
+            break;
         case 12:
             fn(&gtid, id_addr, p_argv[0], p_argv[1], p_argv[2], p_argv[3],
                p_argv[4], p_argv[5], p_argv[6], p_argv[7], p_argv[8], p_argv[9],
@@ -214,11 +222,12 @@ void __kmpc_fork_call(ident_t *loc, kmp_int32 argc, kmpc_micro microtask, ...) {
     // i ++) ((uint8_t*)args)[i]=0;
     // first element holds pointer to the microtask
     local_kmps_args[0] = (_kmp_ptr32)microtask;
+
     // copy remaining varargs
     va_start(vl, microtask);
     for (int i = 1; i <= argc; ++i) {
         local_kmps_args[i] = (_kmp_ptr32)va_arg(vl, _kmp_ptr32);
-    }
+    } //errors here. Overlapping of the local_kmps_args. Basically first cluster core writes to the same memory location as the second cluster core
     va_end(vl);
 
     KMP_PRINTF(10,
@@ -284,12 +293,12 @@ increment and chunk size.
 
 @{
 */
+// int iters[2]={0,0};
 void __kmpc_for_static_init_4(ident_t *loc, kmp_int32 gtid,
                               enum sched_type sched, kmp_int32 *plastiter,
                               kmp_int32 *plower, kmp_int32 *pupper,
                               kmp_int32 *pstride, kmp_int32 incr,
-                              kmp_int32 chunk) {
-
+                              kmp_int32 chunk) {        
     (void)loc;
     (void)gtid;
     _OMP_T *omp = omp_getData();
@@ -347,9 +356,17 @@ void __kmpc_for_static_init_4(ident_t *loc, kmp_int32 gtid,
                    team->nbThreads, chunk, leftOver);
     
 
-    } 
-    
-    else if(sched == kmp_distribute_static){
+    }else if(sched == kmp_distribute_static_chunked){
+
+        int span = incr * chunk;
+        *pstride = span * omp->numTeams;
+        *plower = *plower + span * teamNum;
+        *pupper = *plower + span - incr;
+        int beginLastChunk = globalUpper - (globalUpper % span);
+        *plastiter = ((beginLastChunk - *plower) % *pstride) == 0;
+
+
+    }else if(sched == kmp_distribute_static){
         
         chunk = loopSize / omp->numTeams;
         int leftOver = loopSize - chunk * omp->numTeams;
@@ -370,7 +387,6 @@ void __kmpc_for_static_init_4(ident_t *loc, kmp_int32 gtid,
             *plastiter = (*pupper == globalUpper && *plower <= globalUpper);
         }
         *pstride = loopSize;
-
     }
 
     KMP_PRINTF(10,
@@ -404,68 +420,68 @@ void __kmpc_for_static_fini(ident_t *loc, kmp_int32 globaltid) {
     // doBarrier(getTeam(omp));
 }
 
-void __kmpc_for_static_init_8u(ident_t *loc, kmp_int32 gtid, kmp_int32 sched,
-                               kmp_int32 *plastiter, kmp_uint64 *plower,
-                               kmp_uint64 *pupper, kmp_int64 *pstride,
-                               kmp_int64 incr, kmp_int64 chunk) {
-    (void)loc;
-    (void)gtid;
-    _OMP_T *omp = omp_getData();
-    _OMP_TEAM_T *team = omp_get_team(omp);
-    unsigned threadNum = omp_get_thread_num();
-    kmp_uint64 loopSize = (*pupper - *plower) / incr + 1;
-    kmp_uint64 globalUpper = *pupper;
+// void __kmpc_for_static_init_8u(ident_t *loc, kmp_int32 gtid, kmp_int32 sched,
+//                                kmp_int32 *plastiter, kmp_uint64 *plower,
+//                                kmp_uint64 *pupper, kmp_int64 *pstride,
+//                                kmp_int64 incr, kmp_int64 chunk) {
+//     (void)loc;
+//     (void)gtid;
+//     _OMP_T *omp = omp_getData();
+//     _OMP_TEAM_T *team = omp_get_team(omp);
+//     unsigned threadNum = omp_get_thread_num();
+//     kmp_uint64 loopSize = (*pupper - *plower) / incr + 1;
+//     kmp_uint64 globalUpper = *pupper;
 
-    KMP_PRINTF(50,
-               "__kmpc_for_static_init_8u gtid %d schedtype %d incr %" PRId64
-               " chunk %" PRId64 "\n",
-               gtid, sched, incr, chunk);
-    KMP_PRINTF(50,
-               "    plast %" PRIu32 " lo,up,strd = [%" PRIu64 ", %" PRIu64
-               ", %" PRId64 "]\n",
-               *plastiter, *plower, *pupper, *pstride);
-    KMP_PRINTF(50, "    loopsize %" PRIu64 "\n", loopSize);
+//     KMP_PRINTF(50,
+//                "__kmpc_for_static_init_8u gtid %d schedtype %d incr %" PRId64
+//                " chunk %" PRId64 "\n",
+//                gtid, sched, incr, chunk);
+//     KMP_PRINTF(50,
+//                "    plast %" PRIu32 " lo,up,strd = [%" PRIu64 ", %" PRIu64
+//                ", %" PRId64 "]\n",
+//                *plastiter, *plower, *pupper, *pstride);
+//     KMP_PRINTF(50, "    loopsize %" PRIu64 "\n", loopSize);
 
-    // chunk size is specified
-    if (sched == kmp_sch_static_chunked) {
-        KMP_PRINTF(50, "    sched: static_chunked\n");
-        kmp_int64 span = incr * chunk;
-        *pstride = span * team->nbThreads;
-        *plower = *plower + span * threadNum;
-        *pupper = *plower + span - incr;
-        kmp_int64 beginLastChunk = globalUpper - (globalUpper % span);
-        *plastiter = ((beginLastChunk - *plower) % *pstride) == 0;
-    }
+//     // chunk size is specified
+//     if (sched == kmp_sch_static_chunked) {
+//         KMP_PRINTF(50, "    sched: static_chunked\n");
+//         kmp_int64 span = incr * chunk;
+//         *pstride = span * team->nbThreads;
+//         *plower = *plower + span * threadNum;
+//         *pupper = *plower + span - incr;
+//         kmp_int64 beginLastChunk = globalUpper - (globalUpper % span);
+//         *plastiter = ((beginLastChunk - *plower) % *pstride) == 0;
+//     }
 
-    // no specified chunk size
-    else if (sched == kmp_sch_static) {
-        KMP_PRINTF(50, "    sched: static\n");
-        chunk = loopSize / team->nbThreads;
-        kmp_int64 leftOver = loopSize - chunk * team->nbThreads;
+//     // no specified chunk size
+//     else if (sched == kmp_sch_static) {
+//         KMP_PRINTF(50, "    sched: static\n");
+//         chunk = loopSize / team->nbThreads;
+//         kmp_int64 leftOver = loopSize - chunk * team->nbThreads;
 
-        // calculate precise chunk size and lower and upper bound
-        if (threadNum < leftOver) {
-            chunk++;
-            *plower = *plower + threadNum * chunk * incr;
-        } else
-            *plower = *plower + threadNum * chunk * incr + leftOver;
-        *pupper = *plower + chunk * incr - incr;
+//         // calculate precise chunk size and lower and upper bound
+//         if (threadNum < leftOver) {
+//             chunk++;
+//             *plower = *plower + threadNum * chunk * incr;
+//         } else
+//             *plower = *plower + threadNum * chunk * incr + leftOver;
+//         *pupper = *plower + chunk * incr - incr;
 
-        if (plastiter != NULL)
-            *plastiter = (*pupper == globalUpper && *plower <= globalUpper);
-        *pstride = loopSize;
+//         if (plastiter != NULL)
+//             *plastiter = (*pupper == globalUpper && *plower <= globalUpper);
+//         *pstride = loopSize;
 
-        KMP_PRINTF(
-            50, "    team thds: %d chunk: %" PRId64 " leftOver: %" PRId64 "\n",
-            team->nbThreads, chunk, leftOver);
-    }
+//         KMP_PRINTF(
+//             50, "    team thds: %d chunk: %" PRId64 " leftOver: %" PRId64 "\n",
+//             team->nbThreads, chunk, leftOver);
+//     }
 
-    KMP_PRINTF(10,
-               "__kmpc_for_static_init_8u plast %4" PRId32 "p[l %4" PRIu64
-               ", u %4" PRIu64 ", i %4" PRId64 ", str %4" PRId64
-               "] chunk %" PRId64 "\n",
-               *plastiter, *plower, *pupper, incr, *pstride, chunk);
-}
+//     KMP_PRINTF(10,
+//                "__kmpc_for_static_init_8u plast %4" PRId32 "p[l %4" PRIu64
+//                ", u %4" PRIu64 ", i %4" PRId64 ", str %4" PRId64
+//                "] chunk %" PRId64 "\n",
+//                *plastiter, *plower, *pupper, incr, *pstride, chunk);
+// }
 
 //================================================================================
 // Dynamic scheduling

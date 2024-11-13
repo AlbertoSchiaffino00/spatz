@@ -24,8 +24,8 @@
         },
         cluster_periph_size: 64, // kB
         dma_data_width: 64,
-        dma_axi_req_fifo_depth: 3,
-        dma_req_fifo_depth: 3,
+        dma_axi_req_fifo_depth: 24,
+        dma_req_fifo_depth: 8,
         // Spatz parameters
         vlen: 512,
         n_fpu: 2,
